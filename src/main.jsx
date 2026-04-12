@@ -22,15 +22,18 @@ const firebaseConfig = isInternalPreview ? JSON.parse(__firebase_config) : {
   appId: getEnv('VITE_FIREBASE_APP_ID')
 };
 
-const hasConfig = isInternalPreview || (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 5);
+// Check if keys exist (at least 10 chars long)
+const hasConfig = isInternalPreview || (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10);
 let auth, db, appId;
 
 if (hasConfig) {
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  const rawId = isInternalPreview ? (__app_id || 'budget-2026') : (getEnv('VITE_APP_ID') || 'budget-2026');
-  appId = rawId.replace(/\//g, '_'); 
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    const rawId = isInternalPreview ? (__app_id || 'budget-2026') : (getEnv('VITE_APP_ID') || 'budget-2026');
+    appId = rawId.replace(/\//g, '_'); 
+  } catch (e) { console.error("Firebase Init Failed", e); }
 }
 
 const geminiKey = isInternalPreview ? "" : getEnv('VITE_GEMINI_API_KEY');
@@ -52,18 +55,20 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (!hasConfig) return;
+    if (!hasConfig || !auth) return;
     const initAuth = async () => {
-      if (isInternalPreview && typeof __initial_auth_token !== 'undefined') {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else { await signInAnonymously(auth); }
+      try {
+        if (isInternalPreview && typeof __initial_auth_token !== 'undefined') {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else { await signInAnonymously(auth); }
+      } catch (err) { console.error("Auth error:", err); }
     };
     initAuth();
     return onAuthStateChanged(auth, setUser);
   }, []);
 
   useEffect(() => {
-    if (!user || !hasConfig) return;
+    if (!user || !hasConfig || !db) return;
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'budget');
     return onSnapshot(docRef, (snap) => {
       if (snap.exists()) setBudgetData(prev => ({ ...prev, ...snap.data() }));
@@ -71,7 +76,7 @@ export default function App() {
   }, [user]);
 
   const saveData = async (dataToSave) => {
-    if (!user || !hasConfig) return;
+    if (!user || !hasConfig || !db) return;
     setIsSaving(true);
     try {
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'budget'), dataToSave);
@@ -79,13 +84,28 @@ export default function App() {
     finally { setTimeout(() => setIsSaving(false), 800); }
   };
 
+  // RENDER CONFIGURATION ASSISTANT IF KEYS ARE MISSING
   if (!hasConfig) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
-        <div className="max-w-md w-full bg-white p-10 rounded-[40px] border border-slate-200 shadow-xl text-center">
-          <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto mb-6" />
-          <h2 className="text-xl font-black mb-2">Configuration Required</h2>
-          <p className="text-sm text-slate-500 mb-6 leading-relaxed">Please add your VITE_FIREBASE_API_KEY to Vercel Environment Variables to activate cloud features.</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
+        <div className="max-w-md w-full bg-white p-10 rounded-[40px] border border-slate-200 shadow-2xl text-center">
+          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-8">
+            <Bot className="w-10 h-10 text-blue-600" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Setup Assistant</h2>
+          <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+            I'm ready to help you manage your money, but I can't connect to your database yet.
+          </p>
+          <div className="space-y-3 text-left mb-8">
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Action Required:</p>
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+              <p className="text-xs font-bold text-slate-700">Add <strong>VITE_FIREBASE_API_KEY</strong> to Vercel</p>
+            </div>
+          </div>
+          <button onClick={() => window.location.reload()} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95">
+            Check Again
+          </button>
         </div>
       </div>
     );
@@ -146,15 +166,15 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto mt-8 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm transition-all hover:shadow-md">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Income</p>
             <p className="text-3xl font-black text-emerald-600 tracking-tight">{budgetData.currency}{totals.inTotal.toLocaleString()}</p>
           </div>
-          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm transition-all hover:shadow-md">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Expenses</p>
             <p className="text-3xl font-black text-rose-600 tracking-tight">{budgetData.currency}{totals.outTotal.toLocaleString()}</p>
           </div>
-          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm">
+          <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm transition-all hover:shadow-md">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Flow</p>
             <p className={`text-3xl font-black tracking-tight ${totals.rem < 0 ? 'text-rose-600' : 'text-blue-600'}`}>{budgetData.currency}{totals.rem.toLocaleString()}</p>
           </div>
@@ -162,32 +182,36 @@ export default function App() {
 
         <nav className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
           {['overview', 'income', 'expenses', 'cards', 'collections'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all whitespace-nowrap ${activeTab === t ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-white text-slate-500 border-slate-200'}`}>{t}</button>
+            <button key={t} onClick={() => setActiveTab(t)} className={`px-8 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest border transition-all whitespace-nowrap ${activeTab === t ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-100' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>{t}</button>
           ))}
         </nav>
 
         <div className="bg-white p-8 rounded-[48px] border border-slate-200 shadow-sm min-h-[400px]">
           {activeTab === 'overview' && (
-            <div className="text-center py-20 space-y-4">
-              <Bot className="w-12 h-12 text-slate-200 mx-auto" />
-              <h3 className="text-lg font-black tracking-tight">Financial Overview</h3>
-              <p className="text-slate-400 text-xs max-w-sm mx-auto">Toggle tabs to log your income and expenses for {MONTHS[currentMonthIndex]}. Cloud data is synced automatically.</p>
+            <div className="text-center py-24 space-y-4">
+              <Bot className="w-16 h-16 text-slate-100 mx-auto" />
+              <h3 className="text-xl font-black tracking-tight text-slate-800">Financial Overview</h3>
+              <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed">Toggle the tabs above to begin logging your income and expenses. Your data will sync instantly across all devices.</p>
             </div>
           )}
 
           {activeTab === 'income' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-xl tracking-tight">Income Sources</h3>
+                <h3 className="font-black text-xl tracking-tight">Monthly Income</h3>
                 <button onClick={() => addItem('incomeItems')} className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
               </div>
               {currentData.incomeItems.map(item => (
-                <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-all">
+                <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-all group">
                   <input className="flex-1 bg-transparent border-none outline-none font-bold text-sm" placeholder="Source name..." value={item.source} onChange={(e) => updateItem('incomeItems', item.id, 'source', e.target.value)} />
-                  <input className="w-28 bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-black text-emerald-600" type="number" value={item.amount} onChange={(e) => updateItem('incomeItems', item.id, 'amount', e.target.value)} />
-                  <button onClick={() => removeItem('incomeItems', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all"><Trash2 className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-300 font-black">{budgetData.currency}</span>
+                    <input className="w-28 bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-black text-emerald-600 shadow-sm" type="number" value={item.amount} onChange={(e) => updateItem('incomeItems', item.id, 'amount', e.target.value)} />
+                  </div>
+                  <button onClick={() => removeItem('incomeItems', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
+              {currentData.incomeItems.length === 0 && <div className="py-20 text-center text-slate-300 italic text-xs">No income logged for {MONTHS[currentMonthIndex]}.</div>}
             </div>
           )}
 
@@ -198,55 +222,29 @@ export default function App() {
                 <button onClick={() => addItem('expenses')} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
               </div>
               {currentData.expenses.map(item => (
-                <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-all">
-                  <select className="text-[10px] font-black uppercase bg-white border border-slate-200 rounded-xl p-2" value={item.category} onChange={(e) => updateItem('expenses', item.id, 'category', e.target.value)}>
+                <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-all group">
+                  <select className="text-[10px] font-black uppercase bg-white border border-slate-200 rounded-xl p-2 outline-none focus:ring-1 ring-blue-500" value={item.category} onChange={(e) => updateItem('expenses', item.id, 'category', e.target.value)}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <input className="flex-1 bg-transparent border-none outline-none font-bold text-sm" placeholder="Description..." value={item.description} onChange={(e) => updateItem('expenses', item.id, 'description', e.target.value)} />
-                  <input className="w-28 bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-black text-rose-600" type="number" value={item.amount} onChange={(e) => updateItem('expenses', item.id, 'amount', e.target.value)} />
-                  <button onClick={() => removeItem('expenses', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'cards' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-xl tracking-tight">Credit Cards</h3>
-                <button onClick={() => addItem('creditCards')} className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
-              </div>
-              {currentData.creditCards.map(item => (
-                <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-5 rounded-[32px] border border-transparent hover:border-slate-200 transition-all">
-                  <CreditCard className="w-5 h-5 text-indigo-400" />
-                  <input className="flex-1 bg-transparent border-none outline-none font-bold text-sm" placeholder="Card name..." value={item.name} onChange={(e) => updateItem('creditCards', item.id, 'name', e.target.value)} />
-                  <input className="w-28 bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-black" type="number" value={item.balance} onChange={(e) => updateItem('creditCards', item.id, 'balance', e.target.value)} />
-                  <button onClick={() => removeItem('creditCards', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'collections' && (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-xl tracking-tight">Receivables</h3>
-                <button onClick={() => addItem('collections')} className="p-3 bg-amber-50 text-amber-600 rounded-2xl hover:bg-amber-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
-              </div>
-              {currentData.collections.map(item => (
-                <div key={item.id} className={`flex gap-4 items-center p-4 rounded-3xl border transition-all ${item.isCollected ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent'}`}>
-                  <button onClick={() => updateItem('collections', item.id, 'isCollected', !item.isCollected)} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${item.isCollected ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-slate-200'}`}>
-                    {item.isCollected && <Check className="w-5 h-5" />}
-                  </button>
-                  <input className={`flex-1 bg-transparent border-none outline-none font-bold text-sm ${item.isCollected ? 'line-through text-slate-400' : ''}`} placeholder="Who owes you?" value={item.debtor} onChange={(e) => updateItem('collections', item.id, 'debtor', e.target.value)} />
-                  <input className="w-24 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-black" type="number" value={item.amount} onChange={(e) => updateItem('collections', item.id, 'amount', e.target.value)} />
-                  <button onClick={() => removeItem('collections', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all"><Trash2 className="w-4 h-4" /></button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-300 font-black">{budgetData.currency}</span>
+                    <input className="w-28 bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-black text-rose-600 shadow-sm" type="number" value={item.amount} onChange={(e) => updateItem('expenses', item.id, 'amount', e.target.value)} />
+                  </div>
+                  <button onClick={() => removeItem('expenses', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button>
                 </div>
               ))}
             </div>
           )}
         </div>
       </main>
+
+      <footer className="max-w-5xl mx-auto py-12 px-6 flex justify-between items-center opacity-30 select-none">
+        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-200">
+          <Zap className="w-3 h-3 text-blue-500" />
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Secure Personal Ledger — v2.9.3</span>
+        </div>
+      </footer>
     </div>
   );
 }
