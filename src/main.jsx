@@ -67,7 +67,7 @@ export default function App() {
     const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'budget');
     return onSnapshot(docRef, (snap) => {
       if (snap.exists()) setBudgetData(prev => ({ ...prev, ...snap.data() }));
-    });
+    }, (err) => console.error("Sync error:", err));
   }, [user]);
 
   const saveData = async (dataToSave) => {
@@ -85,7 +85,7 @@ export default function App() {
         <div className="max-w-md w-full bg-white p-10 rounded-[40px] border border-slate-200 shadow-xl text-center">
           <AlertTriangle className="w-12 h-12 text-rose-500 mx-auto mb-6" />
           <h2 className="text-xl font-black mb-2">Configuration Required</h2>
-          <p className="text-sm text-slate-500 mb-6">Please add your VITE_FIREBASE_API_KEY to Vercel Environment Variables.</p>
+          <p className="text-sm text-slate-500 mb-6 leading-relaxed">Please add your VITE_FIREBASE_API_KEY to Vercel Environment Variables to activate cloud features.</p>
         </div>
       </div>
     );
@@ -171,15 +171,15 @@ export default function App() {
             <div className="text-center py-20 space-y-4">
               <Bot className="w-12 h-12 text-slate-200 mx-auto" />
               <h3 className="text-lg font-black tracking-tight">Financial Overview</h3>
-              <p className="text-slate-400 text-xs max-w-sm mx-auto">Toggle tabs to log your income and expenses for {MONTHS[currentMonthIndex]}. AI insights will appear here once analyzed.</p>
+              <p className="text-slate-400 text-xs max-w-sm mx-auto">Toggle tabs to log your income and expenses for {MONTHS[currentMonthIndex]}. Cloud data is synced automatically.</p>
             </div>
           )}
 
           {activeTab === 'income' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-black text-xl tracking-tight">Monthly Income</h3>
-                <button onClick={() => addItem('incomeItems')} className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all"><Plus className="w-5 h-5" /></button>
+                <h3 className="font-black text-xl tracking-tight">Income Sources</h3>
+                <button onClick={() => addItem('incomeItems')} className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
               </div>
               {currentData.incomeItems.map(item => (
                 <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-all">
@@ -195,7 +195,7 @@ export default function App() {
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-black text-xl tracking-tight">Spending Log</h3>
-                <button onClick={() => addItem('expenses')} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all"><Plus className="w-5 h-5" /></button>
+                <button onClick={() => addItem('expenses')} className="p-3 bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
               </div>
               {currentData.expenses.map(item => (
                 <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-4 rounded-3xl border border-transparent hover:border-slate-200 transition-all">
@@ -209,8 +209,42 @@ export default function App() {
               ))}
             </div>
           )}
-          
-          {/* Credit Card and Collection screens would follow similar patterns */}
+
+          {activeTab === 'cards' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-black text-xl tracking-tight">Credit Cards</h3>
+                <button onClick={() => addItem('creditCards')} className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
+              </div>
+              {currentData.creditCards.map(item => (
+                <div key={item.id} className="flex gap-4 items-center bg-slate-50 p-5 rounded-[32px] border border-transparent hover:border-slate-200 transition-all">
+                  <CreditCard className="w-5 h-5 text-indigo-400" />
+                  <input className="flex-1 bg-transparent border-none outline-none font-bold text-sm" placeholder="Card name..." value={item.name} onChange={(e) => updateItem('creditCards', item.id, 'name', e.target.value)} />
+                  <input className="w-28 bg-white border border-slate-200 rounded-2xl px-4 py-2 text-sm font-black" type="number" value={item.balance} onChange={(e) => updateItem('creditCards', item.id, 'balance', e.target.value)} />
+                  <button onClick={() => removeItem('creditCards', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'collections' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-black text-xl tracking-tight">Receivables</h3>
+                <button onClick={() => addItem('collections')} className="p-3 bg-amber-50 text-amber-600 rounded-2xl hover:bg-amber-100 transition-all shadow-sm"><Plus className="w-5 h-5" /></button>
+              </div>
+              {currentData.collections.map(item => (
+                <div key={item.id} className={`flex gap-4 items-center p-4 rounded-3xl border transition-all ${item.isCollected ? 'bg-emerald-50/50 border-emerald-100' : 'bg-slate-50 border-transparent'}`}>
+                  <button onClick={() => updateItem('collections', item.id, 'isCollected', !item.isCollected)} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${item.isCollected ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white border border-slate-200'}`}>
+                    {item.isCollected && <Check className="w-5 h-5" />}
+                  </button>
+                  <input className={`flex-1 bg-transparent border-none outline-none font-bold text-sm ${item.isCollected ? 'line-through text-slate-400' : ''}`} placeholder="Who owes you?" value={item.debtor} onChange={(e) => updateItem('collections', item.id, 'debtor', e.target.value)} />
+                  <input className="w-24 bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-black" type="number" value={item.amount} onChange={(e) => updateItem('collections', item.id, 'amount', e.target.value)} />
+                  <button onClick={() => removeItem('collections', item.id)} className="p-2 text-rose-300 hover:text-rose-500 transition-all"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
     </div>
