@@ -22,7 +22,7 @@ const firebaseConfig = isInternalPreview ? JSON.parse(__firebase_config) : {
   appId: getEnv('VITE_FIREBASE_APP_ID')
 };
 
-// Check if keys exist (at least 10 chars long)
+// SAFETY CHECK: Verification of the API Key format
 const hasConfig = isInternalPreview || (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10);
 let auth, db, appId;
 
@@ -89,22 +89,24 @@ export default function App() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 font-sans">
         <div className="max-w-md w-full bg-white p-10 rounded-[40px] border border-slate-200 shadow-2xl text-center">
-          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-8">
-            <Bot className="w-10 h-10 text-blue-600" />
+          <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-8 text-rose-500">
+             <AlertTriangle className="w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Setup Assistant</h2>
+          <h2 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Configuration Error</h2>
           <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-            I'm ready to help you manage your money, but I can't connect to your database yet.
+            Your console shows <strong>auth/configuration-not-found</strong>. This means Vercel cannot see your Firebase keys.
           </p>
           <div className="space-y-3 text-left mb-8">
-            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Action Required:</p>
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
-              <p className="text-xs font-bold text-slate-700">Add <strong>VITE_FIREBASE_API_KEY</strong> to Vercel</p>
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">How to Fix:</p>
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+              <p className="text-xs text-slate-600 font-medium">1. Go to Vercel Dashboard -> Settings -> Environment Variables</p>
+              <p className="text-xs text-slate-600 font-medium">2. Add <strong>VITE_FIREBASE_API_KEY</strong></p>
+              <p className="text-xs text-slate-600 font-medium">3. Add <strong>VITE_FIREBASE_PROJECT_ID</strong></p>
+              <p className="text-xs text-slate-600 font-medium italic text-rose-500">4. Redeploy the project after saving.</p>
             </div>
           </div>
-          <button onClick={() => window.location.reload()} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-blue-100 transition-all hover:bg-blue-700 active:scale-95">
-            Check Again
+          <button onClick={() => window.location.reload()} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all hover:bg-slate-800 active:scale-95">
+            Refresh App
           </button>
         </div>
       </div>
@@ -242,7 +244,7 @@ export default function App() {
       <footer className="max-w-5xl mx-auto py-12 px-6 flex justify-between items-center opacity-30 select-none">
         <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-slate-200">
           <Zap className="w-3 h-3 text-blue-500" />
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Secure Personal Ledger — v2.9.3</span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Secure Personal Ledger — v2.9.4</span>
         </div>
       </footer>
     </div>
